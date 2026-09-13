@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Fire & Suppression Inventory System</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1A2530">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    :root {
+      --bg-dark: #1A2530;
+      --card-bg: #22313F;
+      --accent-red: #E74C3C;
+      --accent-green: #2ECC71;
+      --text-light: #ECF0F1;
+      --text-muted: #95A5A6;
+      --border-color: #34495E;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: var(--bg-dark); color: var(--text-light); -webkit-tap-highlight-color: transparent; }
+
+    /* Header */
+    header { background-color: #121A24; padding: 15px; text-align: center; border-bottom: 2px solid var(--accent-red); position: sticky; top: 0; z-index: 100; }
+    header h1 { font-size: 1.2rem; color: var(--text-light); text-transform: uppercase; letter-spacing: 1px; }
+    header p { font-size: 0.75rem; color: var(--accent-red); font-weight: bold; }
+
+    /* Main Container */
+    .container { padding: 15px; padding-bottom: 80px; max-width: 600px; margin: 0 auto; }
+
+    /* Role Switcher */
+    .role-bar { display: flex; background: var(--card-bg); border-radius: 8px; margin-bottom: 20px; padding: 4px; border: 1px solid var(--border-color); }
+    .role-btn { flex: 1; padding: 10px; border: none; background: none; color: var(--text-muted); font-weight: bold; font-size: 0.85rem; border-radius: 6px; cursor: pointer; }
+    .role-btn.active { background: var(--accent-red); color: white; }
+
+    /* Scanner View */
+    .scanner-card { background: var(--card-bg); padding: 15px; border-radius: 12px; border: 1px solid var(--border-color); text-align: center; margin-bottom: 20px; }
+    #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-top: 10px; }
+    
+    /* Stats & Alert Banner */
+    .alert-banner { background: rgba(231, 76, 60, 0.2); border: 1px solid var(--accent-red); color: #FF6B6B; padding: 10px 15px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+
+    /* Forms & Inputs */
+    .form-group { margin-bottom: 12px; }
+    label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; }
+    input, select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: #121A24; color: var(--text-light); font-size: 0.95rem; }
+    button.btn-primary { width: 100%; padding: 14px; background: var(--accent-red); border: none; color: white; font-weight: bold; border-radius: 8px; font-size: 1rem; cursor: pointer; margin-top: 10px; }
+    button.btn-primary:active { opacity: 0.8; }
+
+    /* Inventory Items List */
+    .inventory-list { margin-top: 15px; }
+    .part-card { background: var(--card-bg); padding: 15px; border-radius: 10px; border: 1px solid var(--border-color); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .part-info h3 { font-size: 1rem; color: white; margin-bottom: 4px; }
+    .part-info p { font-size: 0.8rem; color: var(--text-muted); }
+    .part-badge { background: #121A24; padding: 6px 12px; border-radius: 6px; text-align: center; border: 1px solid var(--border-color); }
+    .part-badge span { display: block; font-size: 1.1rem; font-weight: bold; color: var(--accent-green); }
+    .part-badge.low span { color: var(--accent-red); }
+    .part-badge label { font-size: 0.65rem; color: var(--text-muted); }
+
+    /* Log History */
+    .log-item { font-size: 0.8rem; padding: 10px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; }
+    .log-user { color: var(--accent-green); font-weight: bold; }
+
+    /* Bottom Nav Bar */
+    .nav-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #121A24; display: flex; justify-content: space-around; padding: 12px 0; border-top: 1px solid var(--border-color); }
+    .nav-btn { background: none; border: none; color: var(--text-muted); font-size: 0.75rem; cursor: pointer; }
+    .nav-btn.active { color: var(--accent-red); font-weight: bold; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Fire & Suppression Inventory</h1>
+    <p>Shop Manager & Tech Mobile System</p>
+  </header>
+
+  <div class="container">
+
+    <!-- Role Selection Bar -->
+    <div class="role-bar">
+      <button class="role-btn active" id="role-tech-btn" onclick="setRole('tech')">Technician Mode</button>
+      <button class="role-btn" id="role-mgr-btn" onclick="setRole('manager')">Manager Mode</button>
+    </div>
+
+    <!-- Alert Notifications -->
+    <div id="low-stock-alert" class="alert-banner hidden">
+      <span>⚠️ <strong>Low Stock Alert:</strong> <span id="alert-count">0</span> items below minimum threshold!</span>
+    </div>
+
+    <!-- Tech View: Quick Checkout -->
+    <div id="view-tech">
+      <div class="scanner-card">
+        <h2>Scan Part Barcode</h2>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Use camera to scan part number or enter manually</p>
+        <div id="reader"></div>
+      </div>
+
+      <div class="scanner-card" style="text-align: left;">
+        <h3>Quick Checkout Form</h3>
+        <div class="form-group" style="margin-top: 10px;">
+          <label>Technician Name / Badge ID</label>
+          <input type="text" id="tech-badge" placeholder="Scan badge or type name (e.g. Tech Dave)">
+        </div>
+        <div class="form-group">
+          <label>Part Number</label>
+          <input type="text" id="tech-part-num" placeholder="e.g. FE-ABC-10LB">
+        </div>
+        <div class="form-group">
+          <label>Quantity Taken</label>
+          <input type="number" id="tech-qty" value="1" min="1">
+        </div>
+        <button class="btn-primary" onclick="checkoutPart()">Confirm Item Checkout</button>
+      </div>
+    </div>
+
+    <!-- Manager View: Add/Edit Inventory & Stock Overview -->
+    <div id="view-manager" class="hidden">
+      <div class="scanner-card" style="text-align: left;">
+        <h3>Add / Intake New Stock</h3>
+        <div class="form-group" style="margin-top: 10px;">
+          <label>Part Number</label>
+          <input type="text" id="mgr-part-num" placeholder="e.g. KS-NOZZLE-12">
+        </div>
+        <div class="form-group">
+          <label>Part Description</label>
+          <input type="text" id="mgr-part-desc" placeholder="e.g. Kitchen Suppression Appliance Nozzle">
+        </div>
+        <div class="form-group">
+          <label>Initial Stock Quantity</label>
+          <input type="number" id="mgr-part-qty" value="10">
+        </div>
+        <div class="form-group">
+          <label>Minimum Stock Threshold (Low Alert)</label>
+          <input type="number" id="mgr-part-min" value="3">
+        </div>
+        <button class="btn-primary" style="background: var(--accent-green);" onclick="addPart()">Add / Update Stock</button>
+      </div>
+
+      <h3 style="margin-top: 20px; margin-bottom: 10px;">Audit Activity Log</h3>
+      <div class="scanner-card" style="text-align: left; padding: 10px;" id="activity-log">
+        <!-- Log entries generated via JS -->
+      </div>
+    </div>
+
+    <!-- Common Inventory List View -->
+    <h3 style="margin-top: 20px; margin-bottom: 10px;">Current Stock Catalog</h3>
+    <div class="form-group">
+      <input type="text" id="search-bar" placeholder="🔍 Search by Part # or Description..." onkeyup="filterCatalog()">
+    </div>
+    <div class="inventory-list" id="inventory-catalog">
+      <!-- Parts dynamically populated here -->
+    </div>
+
+  </div>
+
+  <script>
+    // Initial Stock Data (Fire Extinguishers & Suppression Parts)
+    let inventory = JSON.parse(localStorage.getItem('fire_inventory')) || [
+      { partNum: 'FE-ABC-10LB', desc: '10lb ABC Dry Chemical Extinguisher', qty: 14, min: 5 },
+      { partNum: 'FE-CO2-15LB', desc: '15lb CO2 Fire Extinguisher Cylinder', qty: 3, min: 4 },
+      { partNum: 'KS-NOZZLE-12', desc: 'Kitchen Suppression Appliance Nozzle', qty: 22, min: 8 },
+      { partNum: 'KS-LINK-360F', desc: 'Fusible Link 360°F Actuation', qty: 2, min: 10 },
+      { partNum: 'KS-CYL-ANSUL', desc: 'Ansul R-102 3-Gallon Agent Tank', qty: 5, min: 2 }
+    ];
+
+    let logs = JSON.parse(localStorage.getItem('fire_logs')) || [
+      { user: 'Tech Mike', action: 'Took 2x FE-ABC-10LB', time: 'Today 08:30 AM' },
+      { user: 'Shop Manager', action: 'Restocked 10x KS-NOZZLE-12', time: 'Yesterday 04:15 PM' }
+    ];
+
+    let currentRole = 'tech';
+
+    function saveData() {
+      localStorage.setItem('fire_inventory', JSON.stringify(inventory));
+      localStorage.setItem('fire_logs', JSON.stringify(logs));
+      renderCatalog();
+      renderLogs();
+      checkAlerts();
+    }
+
+    function setRole(role) {
+      currentRole = role;
+      document.getElementById('role-tech-btn').classList.toggle('active', role === 'tech');
+      document.getElementById('role-mgr-btn').classList.toggle('active', role === 'manager');
+      document.getElementById('view-tech').classList.toggle('hidden', role !== 'tech');
+      document.getElementById('view-manager').classList.toggle('hidden', role !== 'manager');
+    }
+
+    function renderCatalog() {
+      const container = document.getElementById('inventory-catalog');
+      container.innerHTML = '';
+      
+      inventory.forEach(item => {
+        const isLow = item.qty <= item.min;
+        const card = document.createElement('div');
+        card.className = 'part-card';
+        card.innerHTML = `
+          <div class="part-info">
+            <h3>${item.partNum}</h3>
+            <p>${item.desc}</p>
+          </div>
+          <div class="part-badge ${isLow ? 'low' : ''}">
+            <span>${item.qty}</span>
+            <label>${isLow ? 'LOW STOCK' : 'IN STOCK'}</label>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function renderLogs() {
+      const logContainer = document.getElementById('activity-log');
+      logContainer.innerHTML = '';
+      logs.slice(-5).reverse().forEach(log => {
+        const item = document.createElement('div');
+        item.className = 'log-item';
+        item.innerHTML = `
+          <span><span class="log-user">${log.user}</span>: ${log.action}</span>
+          <span style="color: var(--text-muted);">${log.time}</span>
+        `;
+        logContainer.appendChild(item);
+      });
+    }
+
+    function checkAlerts() {
+      const lowItems = inventory.filter(item => item.qty <= item.min);
+      const alertBanner = document.getElementById('low-stock-alert');
+      if (lowItems.length > 0) {
+        alertBanner.classList.remove('hidden');
+        document.getElementById('alert-count').innerText = lowItems.length;
+      } else {
+        alertBanner.classList.add('hidden');
+      }
+    }
+
+    function checkoutPart() {
+      const user = document.getElementById('tech-badge').value || 'Unknown Tech';
+      const partNum = document.getElementById('tech-part-num').value.trim().toUpperCase();
+      const qty = parseInt(document.getElementById('tech-qty').value) || 1;
+
+      const item = inventory.find(p => p.partNum.toUpperCase() === partNum);
+      if (!item) {
+        alert('Part number not found in system!');
+        return;
+      }
+
+      if (item.qty < qty) {
+        alert(`Insufficient stock! Only ${item.qty} available.`);
+        return;
+      }
+
+      item.qty -= qty;
+      logs.push({
+        user: user,
+        action: `Checked out ${qty}x ${item.partNum}`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      });
+
+      alert(`Successfully checked out ${qty}x ${item.partNum}`);
+      document.getElementById('tech-part-num').value = '';
+      saveData();
+    }
+
+    function addPart() {
+      const partNum = document.getElementById('mgr-part-num').value.trim().toUpperCase();
+      const desc = document.getElementById('mgr-part-desc').value.trim();
+      const qty = parseInt(document.getElementById('mgr-part-qty').value) || 0;
+      const min = parseInt(document.getElementById('mgr-part-min').value) || 0;
+
+      if (!partNum || !desc) {
+        alert('Please fill out part number and description.');
+        return;
+      }
+
+      let existing = inventory.find(p => p.partNum.toUpperCase() === partNum);
+      if (existing) {
+        existing.qty += qty;
+        existing.min = min;
+        logs.push({ user: 'Manager', action: `Added +${qty} to ${partNum}`, time: 'Just now' });
+      } else {
+        inventory.push({ partNum, desc, qty, min });
+        logs.push({ user: 'Manager', action: `Created new item ${partNum}`, time: 'Just now' });
+      }
+
+      alert(`Part ${partNum} saved successfully.`);
+      document.getElementById('mgr-part-num').value = '';
+      document.getElementById('mgr-part-desc').value = '';
+      saveData();
+    }
+
+    function filterCatalog() {
+      const query = document.getElementById('search-bar').value.toLowerCase();
+      const cards = document.querySelectorAll('.part-card');
+      cards.forEach(card => {
+        const text = card.innerText.toLowerCase();
+        card.style.display = text.includes(query) ? 'flex' : 'none';
+      });
+    }
+
+    // Initialize Barcode Scanner via Camera
+    function initScanner() {
+      if (typeof Html5QrcodeScanner !== 'undefined') {
+        const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 150 } });
+        html5QrcodeScanner.render((decodedText) => {
+          document.getElementById('tech-part-num').value = decodedText.toUpperCase();
+        }, (error) => {});
+      }
+    }
+
+    window.onload = function() {
+      renderCatalog();
+      renderLogs();
+      checkAlerts();
+      initScanner();
+    };
+  </script>
+</body>
+</html>
