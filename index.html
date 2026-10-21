@@ -317,9 +317,21 @@
       document.getElementById('config-body').classList.toggle('hidden');
     }
 
+    /* ---------- Baked-in Cloud Credentials ----------
+       The anon key is PUBLIC BY DESIGN — it ships in every
+       copy of this file and that is normal and expected.
+       Real protection comes from Row Level Security policies
+       inside Supabase, never from hiding this key.
+       NEVER put the service_role key in this file: it
+       bypasses every security rule.
+       ---------------------------------------------------- */
+    const CLOUD_URL = 'https://qbkftfamsdlmbhhwwggg.supabase.co';
+    const CLOUD_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFia2Z0ZmFtc2RnbG1iaGh3d2dnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkzMTc3ODQsImV4cCI6MjEwNDg5Mzc4NH0.qAnrWez6BXPJeYKv9QI1PG9MsaaVLVbwi-FRkQnP_7U';
+
     function initCloud() {
-      const url = localStorage.getItem('supabase_url') || '';
-      const key = localStorage.getItem('supabase_key') || '';
+      // A device that saved its own credentials wins; otherwise use baked-in.
+      const url = localStorage.getItem('supabase_url') || CLOUD_URL;
+      const key = localStorage.getItem('supabase_key') || CLOUD_KEY;
       document.getElementById('cfg-url').value = url;
       document.getElementById('cfg-key').value = key;
 
