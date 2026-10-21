@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
 
   <!-- Supabase JS Client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
 
   <style>
     :root {
@@ -779,6 +779,52 @@
         if (data && data.session) { enterApp(data.session); }
         else { showGate(); }
       });
+    }
+
+    /* ---------- Connection self-test ----------
+       Runs a tiny request against Supabase and reports exactly
+       what came back, so a silent auth failure becomes visible.
+       Call from the console:  await selftest()
+       ---------------------------------------------------- */
+    async function selftest() {
+      const out = { url: CLOUD_URL, keyPrefix: CLOUD_KEY.slice(0, 16) + '...', steps: {} };
+
+      // 1. Can we reach the REST API at all?
+      try {
+        const r = await fetch(CLOUD_URL + '/rest/v1/', {
+          headers: { apikey: CLOUD_KEY, Authorization: 'Bearer ' + CLOUD_KEY }
+        });
+        out.steps.rest = { status: r.status, ok: r.ok };
+      } catch (e) {
+        out.steps.rest = { error: String(e) };
+      }
+
+      // 2. Does the client report a session?
+      try {
+        const { data } = await db.auth.getSession();
+        out.steps.session = data && data.session ? 'present' : 'none';
+      } catch (e) {
+        out.steps.session = { error: String(e) };
+      }
+
+      // 3. Can we read profiles as the current user?
+      try {
+        const { data, error } = await db.from('profiles').select('id, full_name, role');
+        out.steps.profiles = error ? { error: error.message, code: error.code } : { rows: data.length, data };
+      } catch (e) {
+        out.steps.profiles = { error: String(e) };
+      }
+
+      // 4. What identity does the database see?
+      try {
+        const { data, error } = await db.rpc('whoami');
+        out.steps.whoami = error ? { error: error.message } : data;
+      } catch (e) {
+        out.steps.whoami = { error: String(e) };
+      }
+
+      console.log('SELFTEST', JSON.stringify(out, null, 2));
+      return out;
     }
 
     function showAuthError(msg) {
