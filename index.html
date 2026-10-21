@@ -847,45 +847,102 @@
 
       if (!name) { showAuthError('Full name is required.'); return; }
 
-      // Join an existing company by invite code (handled by a DB function)
+      // ---- JOIN AN EXISTING COMPANY BY INVITE CODE ----
       if (invite) {
+        const { data: signUpData, error: suErr } = await db.auth.signUp({ email: authEmail, password: pass });
+        if (suErr) { showAuthError(suErr.message); return; }
+
+        if (!signUpData.user) {
+          showAuthError('Supabase did not return a user. Turn OFF "Confirm email" in Authentication → Providers → Email, then try again.');
+          return;
+        }
+
         const { data: joined, error: joinErr } = await db.rpc('join_company_with_code', {
           invite_code_input: invite,
           full_name_input: name
         });
-        if (joinErr) { showAuthError('Join failed: ' + joinErr.message); return; }
-        if (joined && joined.status === 'exists') {
-          // Account already created — just sign in
-          const { data } = await db.auth.signInWithPassword({ email: authEmail, password: pass });
-          if (data && data.session) { await enterApp(data.session); }
+
+        if (joinErr) {
+          await cleanupOrphanAccount(joinErr.message, 'Could not join that company');
           return;
         }
-        showAuthError('Account created. Sign in with your email and password.');
-        toggleAuthMode();
+
+        const { data: sessionData } = await db.auth.getSession();
+        if (sessionData && sessionData.session) { await enterApp(sessionData.session); }
+        else { showAuthError('Account created. Please sign in.'); toggleAuthMode(); }
         return;
       }
 
-      // Register a brand new company
+      // ---- REGISTER A BRAND NEW COMPANY ----
       if (!newCo) { showAuthError('Enter a company invite code, or a new company name.'); return; }
 
       const { data: signUpData, error: suErr } = await db.auth.signUp({ email: authEmail, password: pass });
       if (suErr) { showAuthError(suErr.message); return; }
 
       if (!signUpData.user) {
-        showAuthError('Check your email to confirm your account, then sign in.');
+        showAuthError('Supabase did not return a user. Turn OFF "Confirm email" in Authentication → Providers → Email, then try again.');
         return;
       }
 
       const { data: coResult, error: coErr } = await db.rpc('create_company_with_admin', {
         company_name_input: newCo,
-        full_name_input: name,
-        user_id_input: signUpData.user.id
+        full_name_input: name
       });
-      if (coErr) { showAuthError('Company setup failed: ' + coErr.message); return; }
+
+      if (coErr) {
+        await cleanupOrphanAccount(coErr.message, 'Company setup failed');
+        return;
+      }
 
       const { data: sessionData } = await db.auth.getSession();
       if (sessionData && sessionData.session) { await enterApp(sessionData.session); }
       else { showAuthError('Account created. Please sign in.'); toggleAuthMode(); }
+    }
+
+    /* ---------- Readable errors + orphan cleanup ----------
+       The signup creates the auth account BEFORE the company step.
+       If the company step fails, the account is left with no profile,
+       which blocks every future attempt ("email already registered").
+       So on failure we sign out and explain exactly what to do.
+       ------------------------------------------------------------ */
+    function explainDbError(raw) {
+      const m = (raw || '').toLowerCase();
+      if (m.includes('could not find the function') || m.includes('schema cache')) {
+        return 'The database functions are missing. Run the setup SQL script in Supabase → SQL Editor, then try again.';
+      }
+      if (m.includes('already belongs to a company')) {
+        return 'This account already has a company. Sign in instead.';
+      }
+      if (m.includes('invalid invite code')) {
+        return 'That invite code was not recognised. Check it with your shop manager.';
+      }
+      if (m.includes('seat limit')) {
+        return 'This company has used all of its user seats. Ask your manager to upgrade the plan.';
+      }
+      if (m.includes('duplicate key') || m.includes('already exists')) {
+        return 'That name is already taken. Try a slightly different company name.';
+      }
+      if (m.includes('rate limit') || m.includes('too many')) {
+        return 'Too many attempts. Wait about an hour before trying again.';
+      }
+      return raw;
+    }
+
+    async function cleanupOrphanAccount(rawMessage, headline) {
+      let extra = '';
+      try {
+        const { data } = await db.auth.getSession();
+        if (data && data.session) {
+          await db.auth.signOut();
+          extra = ' The half-created account was signed out automatically.';
+        }
+      } catch (e) { /* best effort */ }
+
+      showAuthError(
+        explainDbError(rawMessage) +
+        extra +
+        ' If the email is already registered, delete it in Supabase → Authentication → Users, then try once more.'
+      );
     }
 
     /* ---------- Enter the app ---------- */
