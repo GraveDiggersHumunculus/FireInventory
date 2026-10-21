@@ -261,6 +261,9 @@
       </div>
     </div>
 
+    <!-- ============ EVERYTHING BELOW IS HIDDEN UNTIL SIGNED IN ============ -->
+    <div id="app-body" class="hidden">
+
     <!-- Alert -->
     <div id="low-stock-alert" class="alert-banner hidden"></div>
 
@@ -344,6 +347,8 @@
     </div>
 
     <footer>KindleOperations &middot; Inventory Control System</footer>
+    </div>
+    <!-- ============ END SIGNED-IN APP BODY ============ -->
   </div>
 
   <!-- Checkout Modal -->
@@ -902,6 +907,7 @@
 
       document.getElementById('auth-gate').classList.add('hidden');
       document.getElementById('user-bar').classList.remove('hidden');
+      document.getElementById('app-body').classList.remove('hidden');
 
       document.getElementById('ub-name').innerText = profile.full_name || 'User';
       document.getElementById('ub-company').innerText = currentCompany ? currentCompany.name : 'Company';
@@ -944,9 +950,9 @@
       logs = [];
       document.getElementById('auth-gate').classList.remove('hidden');
       document.getElementById('user-bar').classList.add('hidden');
+      document.getElementById('app-body').classList.add('hidden');
       document.getElementById('invite-panel').classList.add('hidden');
       document.getElementById('view-manager').classList.add('hidden');
-      renderAll();
     }
 
     async function signOut() {
