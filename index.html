@@ -832,7 +832,14 @@
         showAuthError('Could not load the cloud library. Check your connection.');
         return;
       }
-      db = window.supabase.createClient(CLOUD_URL, CLOUD_KEY);
+      db = window.supabase.createClient(CLOUD_URL, CLOUD_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: false,
+          storageKey: 'kindleoperations-auth'
+        }
+      });
       setStatus('online', '⚡ Cloud Synced');
 
       db.auth.onAuthStateChange((event, session) => {
