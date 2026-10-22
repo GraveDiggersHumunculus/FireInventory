@@ -318,8 +318,13 @@
           </div>
           <div class="form-group">
             <label>Category</label>
-            <input type="text" id="mgr-part-cat" placeholder="Fire Extinguishers" list="cat-list">
-            <datalist id="cat-list"></datalist>
+            <select id="mgr-part-cat" onchange="onCategoryChange()">
+              <option value="">Select a category...</option>
+            </select>
+            <input type="text" id="mgr-new-cat" class="hidden"
+                   placeholder="Type the new category name"
+                   style="margin-top: 8px;">
+            <span class="hint">Choose a category, or pick "＋ Add new category" at the bottom of the list.</span>
           </div>
         </div>
         <div class="form-group">
@@ -600,10 +605,59 @@
       renderCatalog();
     }
 
+    /* ---------- Category dropdown ----------
+       Options come from (a) what your inventory already uses, and
+       (b) the built-in starter categories. The last option switches
+       the form into "type a new category" mode.
+       ---------------------------------------------------- */
+    const NEW_CAT = '__NEW__';
+
+    function allKnownCategories() {
+      const used = inventory.map(categorize);
+      const builtin = CATEGORY_RULES.map(r => r.cat);
+      return [...new Set([...used, ...builtin])].sort();
+    }
+
     function renderCategoryList() {
-      const cats = [...new Set(inventory.map(categorize))].sort();
-      const dl = document.getElementById('cat-list');
-      if (dl) dl.innerHTML = cats.map(c => `<option value="${c}">`).join('');
+      const sel = document.getElementById('mgr-part-cat');
+      if (!sel) return;
+
+      const current = sel.value;
+      const cats = allKnownCategories();
+
+      sel.innerHTML =
+        '<option value="">Select a category...</option>' +
+        cats.map(c => `<option value="${c}">${c}</option>`).join('') +
+        `<option value="${NEW_CAT}">＋ Add new category</option>`;
+
+      // Restore the previous choice if it still exists
+      if (current && (cats.includes(current) || current === NEW_CAT)) {
+        sel.value = current;
+      }
+      onCategoryChange();
+    }
+
+    function onCategoryChange() {
+      const sel = document.getElementById('mgr-part-cat');
+      const input = document.getElementById('mgr-new-cat');
+      if (!sel || !input) return;
+
+      if (sel.value === NEW_CAT) {
+        input.classList.remove('hidden');
+        input.focus();
+      } else {
+        input.classList.add('hidden');
+        input.value = '';
+      }
+    }
+
+    /* Returns the category the manager actually chose, or '' if none. */
+    function selectedCategory() {
+      const sel = document.getElementById('mgr-part-cat');
+      const input = document.getElementById('mgr-new-cat');
+      if (!sel) return '';
+      if (sel.value === NEW_CAT) return (input.value || '').trim();
+      return (sel.value || '').trim();
     }
 
     /* ---------- Stats & Alerts ---------- */
@@ -718,11 +772,17 @@
     async function addPart() {
       const partNum = document.getElementById('mgr-part-num').value.trim().toUpperCase();
       const desc = document.getElementById('mgr-part-desc').value.trim();
-      const cat = document.getElementById('mgr-part-cat').value.trim();
+      const cat = selectedCategory();
       const qty = parseInt(document.getElementById('mgr-part-qty').value) || 0;
       const min = parseInt(document.getElementById('mgr-part-min').value) || 0;
 
       if (!partNum || !desc) { alert('Part number and description are required.'); return; }
+
+      const sel = document.getElementById('mgr-part-cat');
+      if (sel && sel.value === NEW_CAT && !cat) {
+        alert('Type a name for the new category, or pick one from the list.');
+        return;
+      }
 
       const existing = inventory.find(i => (i.part_num || '').toUpperCase() === partNum);
 
@@ -754,7 +814,11 @@
 
       document.getElementById('mgr-part-num').value = '';
       document.getElementById('mgr-part-desc').value = '';
-      document.getElementById('mgr-part-cat').value = '';
+      document.getElementById('mgr-new-cat').value = '';
+      const catSel = document.getElementById('mgr-part-cat');
+      if (catSel) catSel.value = '';
+      onCategoryChange();
+      loadFromCloud();
       alert(`${partNum} saved.`);
     }
 
